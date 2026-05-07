@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏颜色提取助手 (网页版)</title>
+    <!-- 引入 OpenCV.js -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+        .container { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #333; }
+        .upload-area { border: 2px dashed #ccc; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; border-radius: 5px; transition: 0.3s; }
+        .upload-area:hover { border-color: #007bff; background-color: #f0f8ff; }
+        #fileInput { display: none; }
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; justify-content: center; }
+        button { padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        button.secondary { background-color: #6c757d; }
+        .result-box { margin-top: 20px; padding: 15px; background: #e9ecef; border-radius: 5px; min-height: 100px; }
+        canvas { max-width: 100%; height: auto; border: 1px solid #ddd; margin-top: 10px; display: none; }
+        .status { color: #666; font-style: italic; }
+        .highlight { color: #d63384; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🎮 游戏颜色提取助手</h1>
+    
+    <div id="status" class="status">正在加载 OpenCV 引擎，请稍候...</div>
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p>📁 点击此处上传游戏截图</p>
+        <input type="file" id="fileInput" accept="image/*" onchange="loadImage(event)">
+    </div>
+    <div class="controls">
+        <label>红色阈值 (0-255): <input type="number" id="redThresh" value="200" style="width: 60px;"></label>
+        <label>绿色阈值: <input type="number" id="greenThresh" value="50" style="width: 60px;"></label>
+        <label>蓝色阈值: <input type="number" id="blueThresh" value="50" style="width: 60px;"></label>
+        <button id="analyzeBtn" onclick="analyzeImage()" disabled>开始分析</button>
+        <button class="secondary" onclick="resetApp()">重置</button>
+    </div>
+    <canvas id="canvasOutput"></canvas>
+    
+    <div class="result-box" id="resultText">
+        等待分析...
+    </div>
+</div>
+<script>
+    let cvReady = false;
+    let srcImage = null;
+    // 1. OpenCV 加载完成回调
+    function onOpenCvReady() {
+        cvReady = true;
+        document.getElementById('status').innerText = "✅ 系统就绪！请上传截图。";
+        document.getElementById('status').style.color = "green";
+    }
+    // 2. 加载图片
+    function loadImage(event) {
+        if (!cvReady) { alert("OpenCV 尚未加载完成，请稍后重试。"); return; }
+        
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                srcImage = img;
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('status').innerText = "🖼️ 图片已加载，点击'开始分析'";
+                
+                // 显示原图
+                const canvas = document.getElementById('canvasOutput');
+                canvas.style.display = 'block';
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    // 3. 核心分析逻辑 (模拟之前的 Python 逻辑)
+    function analyzeImage() {
+        if (!srcImage || !cvReady) return;
+        try {
+            // 读取图片到 OpenCV Mat
+            let src = cv.imread('canvasOutput');
+            let dst = new cv.Mat();
+            
+            // 获取用户设定的阈值
+            const rThresh = parseInt(document.getElementById('redThresh').value);
+            const gThresh = parseInt(document.getElementById('greenThresh').value);
+            const bThresh = parseInt(document.getElementById('blueThresh').value);
+            // --- 模拟逻辑：寻找特定颜色区域 ---
+            // 这里演示一个简单的颜色过滤：找出 R>G 且 R>B 的区域 (假设找红色)
+            // 在实际游戏中，你可能需要更复杂的逻辑来定位网格
+            
+            let mask = new cv.Mat();
+            let lower = new cv.Mat(src.rows, src.cols, src.type(), [bThresh, gThresh, rThresh, 0]);
+            let upper = new cv.Mat(src.rows, src.cols, src.type(), [255, 255, 255, 255]);
+            
+            // 注意：OpenCV JS 默认是 BGRA 顺序，Python PIL 是 RGB，需注意转换或逻辑调整
+            // 这里做一个简单的二值化演示：只要红色通道超过阈值就标红
+            cv.inRange(src, lower, upper, mask);
+            // 在图上画出找到的区域轮廓
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+            cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+            let resultMsg = "分析完成！<br>";
+            let foundCount = 0;
+            for (let i = 0; i < contours.size(); ++i) {
+                let cnt = contours.get(i);
+                let area = cv.contourArea(cnt);
+                if (area > 500) { // 过滤掉太小的噪点
+                    foundCount++;
+                    let rect = cv.boundingRect(cnt);
+                    // 在原图上画框
+                    cv.rectangle(src, new cv.Point(rect.x, rect.y), new cv.Point(rect.x + rect.width, rect.y + rect.height), [0, 255, 0, 255], 2);
+                    
+                    // 模拟计算网格位置 (假设每个格子 100x100，需根据实际情况调整)
+                    // 这里仅做演示输出坐标
+                    resultMsg += `发现目标区域 #${foundCount}: 坐标 (${rect.x}, ${rect.y}), 面积: ${Math.floor(area)}<br>`;
+                }
+            }
+            if (foundCount === 0) {
+                resultMsg += "<span class='highlight'>未找到符合颜色条件的明显区域，请调整阈值。</span>";
+            } else {
+                resultMsg += `<span class='highlight'>共找到 ${foundCount} 个潜在目标。</span>`;
+            }
+            // 显示结果图和文字
+            cv.imshow('canvasOutput', src);
+            document.getElementById('resultText').innerHTML = resultMsg;
+            // 清理内存
+            src.delete(); dst.delete(); mask.delete(); lower.delete(); upper.delete();
+            contours.delete(); hierarchy.delete();
+        } catch (err) {
+            document.getElementById('resultText').innerText = "发生错误：" + err.message;
+        }
+    }
+    function resetApp() {
+        location.reload();
+    }
+</script>
+</body>
+</html>
